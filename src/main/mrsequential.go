@@ -2,17 +2,24 @@ package main
 
 //
 // simple sequential MapReduce.
+// For loading plugins on MacOs, version > 1.21.4 is required.
+// See:
+// https://github.com/golang/go/issues/63401
 //
 // go run mrsequential.go wc.so pg*.txt
 //
 
-import "fmt"
-import "6.824/mr"
-import "plugin"
-import "os"
-import "log"
-import "io/ioutil"
-import "sort"
+import (
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"plugin"
+	"sort"
+
+	"6.824/mr"
+)
 
 // for sorting by key.
 type ByKey []mr.KeyValue
@@ -28,7 +35,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	log.Println("Loading plugin: " + os.Args[1])
 	mapf, reducef := loadPlugin(os.Args[1])
+	log.Println("Plugin loaded: " + os.Args[1])
 
 	//
 	// read each input file,
@@ -41,7 +50,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("cannot open %v", filename)
 		}
-		content, err := ioutil.ReadAll(file)
+		content, err := io.ReadAll(file)
 		if err != nil {
 			log.Fatalf("cannot read %v", filename)
 		}
@@ -86,15 +95,19 @@ func main() {
 	ofile.Close()
 }
 
-//
 // load the application Map and Reduce functions
 // from a plugin file, e.g. ../mrapps/wc.so
-//
 func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
+
+	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("Could not find file:" + filename)
+	}
+
 	p, err := plugin.Open(filename)
 	if err != nil {
-		log.Fatalf("cannot load plugin %v", filename)
+		log.Fatalf("Cannot load plugin %v", filename)
 	}
+
 	xmapf, err := p.Lookup("Map")
 	if err != nil {
 		log.Fatalf("cannot find Map in %v", filename)
